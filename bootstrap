@@ -1,0 +1,10 @@
+ARROW_DIR="third_party/arrow/cpp/"
+ARROW_BUILD_DIR="${ARROW_DIR}/build"
+
+
+# Build Arrow
+mkdir -p ${ARROW_BUILD_DIR}
+pushd ${ARROW_BUILD_DIR}
+cmake .. --preset ninja-release-basic -DARROW_BUILD_STATIC=ON
+cmake --build .
+popd

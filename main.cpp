@@ -72,27 +72,41 @@ struct ArrowArray {
 
 #endif  // ARROW_C_DATA_INTERFACE
 
-arrow::Status manipulate(std::shared_ptr<arrow::RecordBatch> rbatch) {
-    ArrowSchema schema;
-    ArrowArray array;
-    auto start = high_resolution_clock::now();
-    ARROW_RETURN_NOT_OK(arrow::ExportRecordBatch(*rbatch, &array, &schema));
-    auto end = high_resolution_clock::now();
+void transform(ArrowSchema* in_schema, ArrowArray* in_array, ArrowSchema* out_schema, ArrowArray* out_array) {
+    *out_schema = *in_schema;
+    *out_array = *in_array;
+}
 
-    std::cout << "Time: " << duration_cast<microseconds>(end - start).count() << std::endl;
-    std::cout << "Name: "<< schema.name << std::endl;
-    std::cout << "Format: " << schema.format << std::endl;
-    std::cout << "Num of children: "<< schema.n_children << std::endl;
+arrow::Result<std::shared_ptr<arrow::RecordBatch>> manipulate(std::shared_ptr<arrow::RecordBatch> rbatch) {
+    ArrowSchema in_schema;
+    ArrowArray in_array;
+    ArrowSchema out_schema;
+    ArrowArray out_array;
 
-    return arrow::Status::OK();
+    auto estart = high_resolution_clock::now();
+    ARROW_RETURN_NOT_OK(arrow::ExportRecordBatch(*rbatch, &in_array, &in_schema));
+    auto estop = high_resolution_clock::now();
+
+    auto tstart = high_resolution_clock::now();
+    transform(&in_schema, &in_array, &out_schema, &out_array);
+    auto tstop = high_resolution_clock::now();
+
+    auto istart = high_resolution_clock::now();
+    auto res = arrow::ImportRecordBatch(&out_array, &out_schema);
+    auto istop = high_resolution_clock::now();
+
+    std::cout << "Export time: " << duration_cast<microseconds>(estop - estart).count() << std::endl;
+    std::cout << "Transform time: " << duration_cast<microseconds>(tstop - tstart).count() << std::endl;
+    std::cout << "Import time: " << duration_cast<microseconds>(istop - istart).count() << std::endl;
+
+    return res;
 }
 
 arrow::Status GenInitialFile() {
   // Make a couple 8-bit integer arrays and a 16-bit integer array -- just like
   // basic Arrow example.
   arrow::Int32Builder intbuilder;
-  int8_t days_raw[5] = {1, 12, 17, 23, 28};
-  for (int i=0; i<100000000; i++) {
+  for (int i=0; i<1000; i++) {
       ARROW_RETURN_NOT_OK(intbuilder.Append(i));
   }
   std::shared_ptr<arrow::Array> days;
@@ -137,9 +151,9 @@ arrow::Status RunMain(int argc, char** argv) {
   ARROW_ASSIGN_OR_RAISE(auto rbatch, ipc_reader->ReadRecordBatch(0));
 
   std::cout << "#### Before #### " << std::endl << rbatch->ToString() << std::endl;
-  ARROW_RETURN_NOT_OK(manipulate(rbatch));
+  ARROW_ASSIGN_OR_RAISE(auto rbatch2, manipulate(rbatch));
   std::cout << std::endl;
-  std::cout << "#### After #### " << std::endl << rbatch->ToString() << std::endl;
+  std::cout << "#### After #### " << std::endl << rbatch2->ToString() << std::endl;
 
   return arrow::Status::OK();
 }

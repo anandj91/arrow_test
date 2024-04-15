@@ -16,89 +16,142 @@
 // under the License.
 
 #include <arrow/api.h>
-#include <arrow/compute/api.h>
 #include <arrow/csv/api.h>
-#include <arrow/csv/writer.h>
 #include <arrow/io/api.h>
+#include <arrow/ipc/api.h>
 #include <arrow/result.h>
 #include <arrow/status.h>
+#include <arrow/c/bridge.h>
 
 #include <iostream>
 #include <vector>
+#include <chrono>
 
-// Many operations in Apache Arrow operate on
-// columns of data, and the columns of data are
-// assembled into a table. In this example, we
-// examine how to compare two arrays which are
-// combined to form a table that is then written
-// out to a CSV file.
-//
-// To run this example you can use
-// ./compute_and_write_csv_example
-//
-// the program will write the files into
-// compute_and_write_output.csv
-// in the current directory
+using namespace std::chrono;
+
+
+#ifndef ARROW_C_DATA_INTERFACE
+#define ARROW_C_DATA_INTERFACE
+
+#define ARROW_FLAG_DICTIONARY_ORDERED 1
+#define ARROW_FLAG_NULLABLE 2
+#define ARROW_FLAG_MAP_KEYS_SORTED 4
+
+struct ArrowSchema {
+  // Array type description
+  const char* format;
+  const char* name;
+  const char* metadata;
+  int64_t flags;
+  int64_t n_children;
+  struct ArrowSchema** children;
+  struct ArrowSchema* dictionary;
+
+  // Release callback
+  void (*release)(struct ArrowSchema*);
+  // Opaque producer-specific data
+  void* private_data;
+};
+
+struct ArrowArray {
+  // Array data description
+  int64_t length;
+  int64_t null_count;
+  int64_t offset;
+  int64_t n_buffers;
+  int64_t n_children;
+  const void** buffers;
+  struct ArrowArray** children;
+  struct ArrowArray* dictionary;
+
+  // Release callback
+  void (*release)(struct ArrowArray*);
+  // Opaque producer-specific data
+  void* private_data;
+};
+
+#endif  // ARROW_C_DATA_INTERFACE
+
+arrow::Status manipulate(std::shared_ptr<arrow::RecordBatch> rbatch) {
+    ArrowSchema schema;
+    ArrowArray array;
+    auto start = high_resolution_clock::now();
+    ARROW_RETURN_NOT_OK(arrow::ExportRecordBatch(*rbatch, &array, &schema));
+    auto end = high_resolution_clock::now();
+
+    std::cout << "Time: " << duration_cast<microseconds>(end - start).count() << std::endl;
+    std::cout << "Name: "<< schema.name << std::endl;
+    std::cout << "Format: " << schema.format << std::endl;
+    std::cout << "Num of children: "<< schema.n_children << std::endl;
+
+    return arrow::Status::OK();
+}
+
+arrow::Status GenInitialFile() {
+  // Make a couple 8-bit integer arrays and a 16-bit integer array -- just like
+  // basic Arrow example.
+  arrow::Int8Builder int8builder;
+  int8_t days_raw[5] = {1, 12, 17, 23, 28};
+  ARROW_RETURN_NOT_OK(int8builder.AppendValues(days_raw, 5));
+  std::shared_ptr<arrow::Array> days;
+  ARROW_ASSIGN_OR_RAISE(days, int8builder.Finish());
+
+  int8_t months_raw[5] = {1, 3, 5, 7, 1};
+  ARROW_RETURN_NOT_OK(int8builder.AppendValues(months_raw, 5));
+  std::shared_ptr<arrow::Array> months;
+  ARROW_ASSIGN_OR_RAISE(months, int8builder.Finish());
+
+  arrow::Int16Builder int16builder;
+  int16_t years_raw[5] = {1990, 2000, 1995, 2000, 1995};
+  ARROW_RETURN_NOT_OK(int16builder.AppendValues(years_raw, 5));
+  std::shared_ptr<arrow::Array> years;
+  ARROW_ASSIGN_OR_RAISE(years, int16builder.Finish());
+
+  // Get a vector of our Arrays
+  std::vector<std::shared_ptr<arrow::Array>> columns = {days, months, years};
+
+  // Make a schema to initialize the Table with
+  std::shared_ptr<arrow::Field> field_day, field_month, field_year;
+  std::shared_ptr<arrow::Schema> schema;
+
+  field_day = arrow::field("Day", arrow::int8());
+  field_month = arrow::field("Month", arrow::int8());
+  field_year = arrow::field("Year", arrow::int16());
+
+  schema = arrow::schema({field_day, field_month, field_year});
+  // With the schema and data, create a Table
+  std::shared_ptr<arrow::Table> table;
+  table = arrow::Table::Make(schema, columns);
+
+  std::shared_ptr<arrow::io::FileOutputStream> outfile;
+  ARROW_ASSIGN_OR_RAISE(outfile, arrow::io::FileOutputStream::Open("test_in.arrow"));
+  ARROW_ASSIGN_OR_RAISE(std::shared_ptr<arrow::ipc::RecordBatchWriter> ipc_writer,
+                        arrow::ipc::MakeFileWriter(outfile, schema));
+  ARROW_RETURN_NOT_OK(ipc_writer->WriteTable(*table));
+  ARROW_RETURN_NOT_OK(ipc_writer->Close());
+
+  return arrow::Status::OK();
+}
+
 
 arrow::Status RunMain(int argc, char** argv) {
-  // Make Arrays
-  arrow::NumericBuilder<arrow::Int64Type> int64_builder;
-  arrow::BooleanBuilder boolean_builder;
+  ARROW_RETURN_NOT_OK(GenInitialFile());
 
-  // Make place for 8 values in total
-  ARROW_RETURN_NOT_OK(int64_builder.Resize(8));
-  ARROW_RETURN_NOT_OK(boolean_builder.Resize(8));
+  // Get "test_in.arrow" into our file pointer
+  ARROW_ASSIGN_OR_RAISE(auto infile, arrow::io::ReadableFile::Open(
+                                    "test_in.arrow", arrow::default_memory_pool()));
 
-  // Bulk append the given values
-  std::vector<int64_t> int64_values = {1, 2, 3, 4, 5, 6, 7, 8};
-  ARROW_RETURN_NOT_OK(int64_builder.AppendValues(int64_values));
-  std::shared_ptr<arrow::Array> array_a;
-  ARROW_RETURN_NOT_OK(int64_builder.Finish(&array_a));
-  int64_builder.Reset();
-  int64_values = {2, 5, 1, 3, 6, 2, 7, 4};
-  std::shared_ptr<arrow::Array> array_b;
-  ARROW_RETURN_NOT_OK(int64_builder.AppendValues(int64_values));
-  ARROW_RETURN_NOT_OK(int64_builder.Finish(&array_b));
+  // Open up the file with the IPC features of the library, gives us a reader object.
+  ARROW_ASSIGN_OR_RAISE(auto ipc_reader, arrow::ipc::RecordBatchFileReader::Open(infile));
 
-  // Cast the arrays to their actual types
-  auto int64_array_a = std::static_pointer_cast<arrow::Int64Array>(array_a);
-  auto int64_array_b = std::static_pointer_cast<arrow::Int64Array>(array_b);
-  // Explicit comparison of values using a loop
-  for (int64_t i = 0; i < 8; i++) {
-    if ((!int64_array_a->IsNull(i)) && (!int64_array_b->IsNull(i))) {
-      bool comparison_result = int64_array_a->Value(i) > int64_array_b->Value(i);
-      boolean_builder.UnsafeAppend(comparison_result);
-    } else {
-      boolean_builder.UnsafeAppendNull();
-    }
-  }
-  std::shared_ptr<arrow::Array> array_a_gt_b_self;
-  ARROW_RETURN_NOT_OK(boolean_builder.Finish(&array_a_gt_b_self));
-  std::cout << "Array explicitly compared" << std::endl;
+  // Using the reader, we can read Record Batches. Note that this is specific to IPC;
+  // for other formats, we focus on Tables, but here, RecordBatches are used.
+  ARROW_ASSIGN_OR_RAISE(auto rbatch, ipc_reader->ReadRecordBatch(0));
 
-  // Explicit comparison of values using a compute function
-  ARROW_ASSIGN_OR_RAISE(arrow::Datum compared_datum,
-                        arrow::compute::CallFunction("greater", {array_a, array_b}));
-  auto array_a_gt_b_compute = compared_datum.make_array();
-  std::cout << "Arrays compared using a compute function" << std::endl;
-
-  // Create a table for the output
-  auto schema =
-      arrow::schema({arrow::field("a", arrow::int64()), arrow::field("b", arrow::int64()),
-                     arrow::field("a>b? (self written)", arrow::boolean()),
-                     arrow::field("a>b? (arrow)", arrow::boolean())});
-  std::shared_ptr<arrow::Table> my_table = arrow::Table::Make(
-      schema, {array_a, array_b, array_a_gt_b_self, array_a_gt_b_compute});
-
-  std::cout << "Table created" << std::endl;
-
-  // Write table to CSV file
-  auto csv_filename = "compute_and_write_output.csv";
-  ARROW_ASSIGN_OR_RAISE(auto outstream, arrow::io::FileOutputStream::Open(csv_filename));
-
-  std::cout << "Writing CSV file" << std::endl;
-  ARROW_RETURN_NOT_OK(arrow::csv::WriteCSV(
-      *my_table, arrow::csv::WriteOptions::Defaults(), outstream.get()));
+  std::cout << "#### Before #### " << std::endl << rbatch->ToString() << std::endl;
+  ARROW_RETURN_NOT_OK(manipulate(rbatch));
+  std::cout << std::endl;
+  std::cout << "#### After #### " << std::endl << rbatch->ToString() << std::endl;
 
   return arrow::Status::OK();
 }

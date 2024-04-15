@@ -90,35 +90,23 @@ arrow::Status manipulate(std::shared_ptr<arrow::RecordBatch> rbatch) {
 arrow::Status GenInitialFile() {
   // Make a couple 8-bit integer arrays and a 16-bit integer array -- just like
   // basic Arrow example.
-  arrow::Int8Builder int8builder;
+  arrow::Int32Builder intbuilder;
   int8_t days_raw[5] = {1, 12, 17, 23, 28};
-  ARROW_RETURN_NOT_OK(int8builder.AppendValues(days_raw, 5));
+  for (int i=0; i<100000000; i++) {
+      ARROW_RETURN_NOT_OK(intbuilder.Append(i));
+  }
   std::shared_ptr<arrow::Array> days;
-  ARROW_ASSIGN_OR_RAISE(days, int8builder.Finish());
+  ARROW_ASSIGN_OR_RAISE(days, intbuilder.Finish());
 
-  int8_t months_raw[5] = {1, 3, 5, 7, 1};
-  ARROW_RETURN_NOT_OK(int8builder.AppendValues(months_raw, 5));
-  std::shared_ptr<arrow::Array> months;
-  ARROW_ASSIGN_OR_RAISE(months, int8builder.Finish());
-
-  arrow::Int16Builder int16builder;
-  int16_t years_raw[5] = {1990, 2000, 1995, 2000, 1995};
-  ARROW_RETURN_NOT_OK(int16builder.AppendValues(years_raw, 5));
-  std::shared_ptr<arrow::Array> years;
-  ARROW_ASSIGN_OR_RAISE(years, int16builder.Finish());
-
-  // Get a vector of our Arrays
-  std::vector<std::shared_ptr<arrow::Array>> columns = {days, months, years};
+  std::vector<std::shared_ptr<arrow::Array>> columns = {days};
 
   // Make a schema to initialize the Table with
-  std::shared_ptr<arrow::Field> field_day, field_month, field_year;
+  std::shared_ptr<arrow::Field> field_day;
   std::shared_ptr<arrow::Schema> schema;
 
-  field_day = arrow::field("Day", arrow::int8());
-  field_month = arrow::field("Month", arrow::int8());
-  field_year = arrow::field("Year", arrow::int16());
+  field_day = arrow::field("Day", arrow::int32());
 
-  schema = arrow::schema({field_day, field_month, field_year});
+  schema = arrow::schema({field_day});
   // With the schema and data, create a Table
   std::shared_ptr<arrow::Table> table;
   table = arrow::Table::Make(schema, columns);

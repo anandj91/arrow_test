@@ -29,10 +29,71 @@
 
 using namespace std::chrono;
 
+void print_schema(ArrowSchema* schema) {
+    std::cout << "===== Schema ======" << std::endl;
+    std::cout << "Format: " << schema->format << std::endl;
+    std::cout << "Name: " << schema->name << std::endl;
+    //std::cout << "Metadata: " << schema->metadata << std::endl;
+    std::cout << "Flags: " << schema->flags << " ";
+    std::cout << ((schema->flags & ARROW_FLAG_NULLABLE) ? "Nullable" : "") << " ";
+    std::cout << ((schema->flags & ARROW_FLAG_DICTIONARY_ORDERED) ? "Dict ordered" : "") << " ";
+    std::cout << ((schema->flags & ARROW_FLAG_MAP_KEYS_SORTED) ? "Map keys sorted" : "") << std::endl;
+    std::cout << "Num of children: " << schema->n_children << std::endl;
+    std::cout << std::endl;
+
+    for (int i=0; i<schema->n_children; i++) {
+        print_schema(schema->children[0]);
+    }
+}
+
+void print_array(ArrowArray* array) {
+    std::cout << "===== Array ======" << std::endl;
+    std::cout << "Length: " << array->length << std::endl;
+    std::cout << "Null count: " << array->null_count << std::endl;
+    std::cout << "Offset: " << array->offset << std::endl;
+    std::cout << "Num of buffers: " << array->n_buffers << std::endl;
+    std::cout << "Num of children: " << array->n_children << std::endl;
+    std::cout << std::endl;
+
+    for (int i=0; i<array->n_children; i++) {
+        print_array(array->children[i]);
+    }
+}
+
+ArrowArray* make_buffer(ArrowArray* array, int num, int size) {
+    auto** buffers = new char*[num];
+    for (int i=0; i<num; i++) {
+        buffers[i] = new char[size];
+    }
+    array->buffers = (const void**) buffers;
+
+    return array;
+}
+
+bool is_valid(char* bitmap, int j) {
+    return bitmap[j / 8] & (1 << (j % 8));
+}
 
 void transform(ArrowSchema* in_schema, ArrowArray* in_array, ArrowSchema* out_schema, ArrowArray* out_array) {
+    print_schema(in_schema);
+    print_array(in_array);
+
     *out_schema = *in_schema;
     *out_array = *in_array;
+
+    auto in_i32_array = in_array->children[0];
+    auto* in_value = (int*) in_i32_array->buffers[1];
+
+    auto out_i32_array = out_array->children[0];
+    make_buffer(out_i32_array, 2, out_i32_array->length * sizeof(int));
+    auto out_bitmap = (char*) out_i32_array->buffers[0];
+    // out_i32_array->buffers[0] = nullptr;
+    auto out_value = (int*) out_i32_array->buffers[1];
+
+    for (int i=0; i<out_i32_array->length; i++) {
+        out_bitmap[i/8] = out_bitmap[i/8] | (1 << (i % 8));
+        out_value[i] = in_value[i] + 10;
+    }
 }
 
 arrow::Result<std::shared_ptr<arrow::RecordBatch>> manipulate(std::shared_ptr<arrow::RecordBatch> rbatch) {

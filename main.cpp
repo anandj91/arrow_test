@@ -39,30 +39,31 @@ void transform(ArrowSchema* in_schema, ArrowArray* in_array, ArrowSchema* out_sc
     in_schema->print_schema();
     in_array->print_array();
 
+    auto* in_i32_array = in_array->children[0];
+    auto* in_i32_value = (int*) in_i32_array->buffers[1];
+
     *out_schema = *in_schema;
-    *out_array = *in_array;
-
-    auto in_i32_array = in_array->children[0];
-    auto* in_value = (int*) in_i32_array->buffers[1];
-
-    auto out_i32_array = new ArrowArray();
-    auto out_bitmap = out_i32_array->add_buffer<char>(in_i32_array->length * sizeof(char));
-    auto out_value = out_i32_array->add_buffer<int>(in_i32_array->length * sizeof(int));
+    auto* out_bitmap = out_array->add_buffer<char>(in_array->length);
+    auto* out_i32_array = out_array->add_children();
+    auto* out_i32_bitmap = out_i32_array->add_buffer<char>(in_i32_array->length);
+    auto* out_i32_value = out_i32_array->add_buffer<int>(in_i32_array->length);
 
     for (int i=0; i<in_i32_array->length; i++) {
+        out_array->length++;
         out_i32_array->length++;
-        out_bitmap[i/8] |= (1 << (i % 8));
-        out_value[i] = in_value[i] + 10;
+        out_bitmap[i/8] |= (1 << (i%8));
+        out_i32_bitmap[i/8] |= (1 << (i%8));
+        out_i32_value[i] = in_i32_value[i] + 10;
     }
-
-    out_array->children[0] = out_i32_array;
 }
 
-arrow::Result<std::shared_ptr<arrow::RecordBatch>> manipulate(std::shared_ptr<arrow::RecordBatch> rbatch) {
+arrow::Status manipulate(std::shared_ptr<arrow::RecordBatch> rbatch) {
     ArrowSchema in_schema;
     ArrowArray in_array;
     ArrowSchema out_schema;
     ArrowArray out_array;
+
+    std::cout << "#### Before #### " << std::endl << rbatch->ToString() << std::endl;
 
     auto estart = high_resolution_clock::now();
     ARROW_RETURN_NOT_OK(arrow::ExportRecordBatch(*rbatch, &in_array, &in_schema));
@@ -73,14 +74,17 @@ arrow::Result<std::shared_ptr<arrow::RecordBatch>> manipulate(std::shared_ptr<ar
     auto tstop = high_resolution_clock::now();
 
     auto istart = high_resolution_clock::now();
-    auto res = arrow::ImportRecordBatch(&out_array, &out_schema);
+    ARROW_ASSIGN_OR_RAISE(auto res, arrow::ImportRecordBatch(&out_array, &out_schema));
     auto istop = high_resolution_clock::now();
 
     std::cout << "Export time: " << duration_cast<microseconds>(estop - estart).count() << std::endl;
     std::cout << "Transform time: " << duration_cast<microseconds>(tstop - tstart).count() << std::endl;
     std::cout << "Import time: " << duration_cast<microseconds>(istop - istart).count() << std::endl;
 
-    return res;
+    std::cout << std::endl;
+    std::cout << "#### After #### " << std::endl << res->ToString() << std::endl;
+
+    return arrow::Status::OK();
 }
 
 arrow::Status GenInitialFile() {
@@ -131,10 +135,7 @@ arrow::Status RunMain(int argc, char** argv) {
   // for other formats, we focus on Tables, but here, RecordBatches are used.
   ARROW_ASSIGN_OR_RAISE(auto rbatch, ipc_reader->ReadRecordBatch(0));
 
-  std::cout << "#### Before #### " << std::endl << rbatch->ToString() << std::endl;
-  ARROW_ASSIGN_OR_RAISE(auto rbatch2, manipulate(rbatch));
-  std::cout << std::endl;
-  std::cout << "#### After #### " << std::endl << rbatch2->ToString() << std::endl;
+  ARROW_RETURN_NOT_OK(manipulate(rbatch));
 
   return arrow::Status::OK();
 }

@@ -59,10 +59,9 @@ struct ArrowSchema {
             schema.private_data) {}
 
     void print_schema() {
-        std::cout << "===== Schema ======" << std::endl;
+        std::cout << "===== Schema (" << std::hex << this << std::dec << ") ======" << std::endl;
         std::cout << "Format: " << this->format << std::endl;
         std::cout << "Name: " << this->name << std::endl;
-        //std::cout << "Metadata: " << this->metadata << std::endl;
         std::cout << "Flags: " << this->flags << " ";
         std::cout << ((this->flags & ARROW_FLAG_NULLABLE) ? "Nullable" : "") << " ";
         std::cout << ((this->flags & ARROW_FLAG_DICTIONARY_ORDERED) ? "Dict ordered" : "") << " ";
@@ -104,8 +103,8 @@ struct ArrowArray {
         nullptr,    /* release */
         nullptr     /* private_data */
     ) {
-        this->buffers = (const void**) malloc(sizeof(char) * 10);
-        this->children = (struct ArrowArray**) malloc(sizeof(ArrowArray) * 10);
+        this->buffers = (const void**) calloc(10, sizeof(char*));
+        this->children = (struct ArrowArray**) calloc(10, sizeof(ArrowArray*));
         this->dictionary = nullptr;
         this->release = static_cast<void(*)(struct ArrowArray*)>(
             [] (struct ArrowArray* array) {
@@ -114,6 +113,7 @@ struct ArrowArray {
                 }
                 for (int i=0; i<array->n_children; i++) {
                     array->children[i]->release(array->children[i]);
+                    delete array->children[i];
                 }
 
                 free(array->buffers);
@@ -162,13 +162,21 @@ struct ArrowArray {
     {}
 
     void print_array() {
-        std::cout << "===== Array ======" << std::endl;
+        std::cout << "===== Array (" << std::hex << this << std::dec << ") ======" << std::endl;
         std::cout << "Length: " << this->length << std::endl;
         std::cout << "Null count: " << this->null_count << std::endl;
         std::cout << "Offset: " << this->offset << std::endl;
-        std::cout << "Num of buffers: " << this->n_buffers << std::endl;
-        std::cout << "Num of children: " << this->n_children << std::endl;
-        std::cout << std::endl;
+        std::cout << "Num of buffers: " << this->n_buffers << " [ ";
+        for (int i=0; i<this->n_buffers; i++) {
+            std::cout << std::hex << this->buffers[i] << std::dec << " ";
+        }
+        std::cout << "]" << std::endl;
+
+        std::cout << "Num of children: " << this->n_children << " [ ";
+        for (int i=0; i<this->n_children; i++) {
+            std::cout << std::hex << this->children[i] << std::dec << " ";
+        }
+        std::cout << "]" << std::endl << std::endl;
 
         for (int i=0; i<this->n_children; i++) {
             this->children[i]->print_array();
@@ -177,14 +185,22 @@ struct ArrowArray {
 
     template<typename T>
     T* add_buffer(int size) {
-        auto buf = (void*) malloc(size);
+        auto* buf = (T*) malloc(size * sizeof(T));
 
-        this->buffers[this->n_buffers] = buf;
+        this->buffers[this->n_buffers] = (void*) buf;
         this->n_buffers++;
 
-        return (T*) buf;
+        return buf;
     }
 
+    ArrowArray* add_children() {
+        auto* array = new ArrowArray();
+
+        this->children[this->n_children] = array;
+        this->n_children++;
+
+        return array;
+    }
 };
 
 #endif  // ARROW_C_DATA_INTERFACE

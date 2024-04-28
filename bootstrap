@@ -5,13 +5,13 @@ ARROW_BUILD_DIR="${ARROW_DIR}/build"
 # Build Arrow
 mkdir -p ${ARROW_BUILD_DIR}
 pushd ${ARROW_BUILD_DIR}
-cmake .. --preset ninja-release-basic -DARROW_BUILD_STATIC=ON
+cmake .. --preset ninja-debug-basic -DARROW_BUILD_STATIC=ON
 cmake --build .
 popd
 
 # Build ArrowTest
 mkdir -p ${ARROWTEST_BUILD_DIR}
 pushd ${ARROWTEST_BUILD_DIR}
-cmake ..
+cmake -DCMAKE_BUILD_TYPE=Debug ..
 make -j
 popd

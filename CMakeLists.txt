@@ -9,6 +9,6 @@ include_directories(${CMAKE_SOURCE_DIR}/third_party/arrow/cpp/src/)
 
 add_executable(main main.cpp)
 target_link_libraries(main PRIVATE
-    ${CMAKE_SOURCE_DIR}/third_party/arrow/cpp/build/release/libarrow.a
-    ${CMAKE_SOURCE_DIR}/third_party/arrow/cpp/build/release/libarrow_bundled_dependencies.a
+    ${CMAKE_SOURCE_DIR}/third_party/arrow/cpp/build/debug/libarrow.a
+    ${CMAKE_SOURCE_DIR}/third_party/arrow/cpp/build/debug/libarrow_bundled_dependencies.a
 )

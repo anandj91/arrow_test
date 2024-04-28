@@ -1,4 +1,5 @@
 #include <cstdint>
+#include <cstdlib>
 #include <iostream>
 
 #ifndef ARROW_C_DATA_INTERFACE
@@ -91,33 +92,51 @@ struct ArrowArray {
     // Opaque producer-specific data
     void* private_data;
 
-    ArrowArray() {}
-
-    ArrowArray(int num) {
-        this->buffers = (const void**)(new char*[num]);
-        this->children = new ArrowArray*[num];
+    ArrowArray() : ArrowArray(
+        0,          /* length */
+        0,          /* null_count */
+        0,          /* offset */
+        0,          /* n_buffers */
+        0,          /* n_children */
+        nullptr,    /* buffers */
+        nullptr,    /* children */
+        nullptr,    /* dictionary */
+        nullptr,    /* release */
+        nullptr     /* private_data */
+    ) {
+        this->buffers = (const void**) malloc(sizeof(char) * 10);
+        this->children = (struct ArrowArray**) malloc(sizeof(ArrowArray) * 10);
         this->dictionary = nullptr;
         this->release = static_cast<void(*)(struct ArrowArray*)>(
             [] (struct ArrowArray* array) {
-                delete[] array->buffers;
-                delete[] array->children;
+                for (int i=0; i<array->n_buffers; i++) {
+                    free((void*) array->buffers[i]);
+                }
+                for (int i=0; i<array->n_children; i++) {
+                    array->children[i]->release(array->children[i]);
+                }
+
+                free(array->buffers);
+                free(array->children);
+
+                array->release = nullptr;
             }
         );
         this->private_data = nullptr;
     }
 
-    ArrowArray(const ArrowArray& array) :
-        ArrowArray(
-            array.length,
-            array.null_count,
-            array.offset,
-            array.n_buffers,
-            array.n_children,
-            array.buffers,
-            array.children,
-            array.dictionary,
-            array.release,
-            array.private_data) {}
+    ArrowArray(const ArrowArray& array) : ArrowArray(
+        array.length,
+        array.null_count,
+        array.offset,
+        array.n_buffers,
+        array.n_children,
+        array.buffers,
+        array.children,
+        array.dictionary,
+        array.release,
+        array.private_data
+    ) {}
 
     ArrowArray(
         int64_t length,
@@ -139,7 +158,8 @@ struct ArrowArray {
         children(children),
         dictionary(dictionary),
         release(release),
-        private_data(private_data) {}
+        private_data(private_data)
+    {}
 
     void print_array() {
         std::cout << "===== Array ======" << std::endl;
@@ -154,6 +174,17 @@ struct ArrowArray {
             this->children[i]->print_array();
         }
     }
+
+    template<typename T>
+    T* add_buffer(int size) {
+        auto buf = (void*) malloc(size);
+
+        this->buffers[this->n_buffers] = buf;
+        this->n_buffers++;
+
+        return (T*) buf;
+    }
+
 };
 
 #endif  // ARROW_C_DATA_INTERFACE

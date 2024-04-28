@@ -31,17 +31,6 @@
 
 using namespace std::chrono;
 
-
-ArrowArray* make_buffer(ArrowArray* array, int num, int size) {
-    auto** buffers = new char*[num];
-    for (int i=0; i<num; i++) {
-        buffers[i] = new char[size];
-    }
-    array->buffers = (const void**) buffers;
-
-    return array;
-}
-
 bool is_valid(char* bitmap, int j) {
     return bitmap[j / 8] & (1 << (j % 8));
 }
@@ -56,16 +45,17 @@ void transform(ArrowSchema* in_schema, ArrowArray* in_array, ArrowSchema* out_sc
     auto in_i32_array = in_array->children[0];
     auto* in_value = (int*) in_i32_array->buffers[1];
 
-    auto out_i32_array = out_array->children[0];
-    make_buffer(out_i32_array, 2, out_i32_array->length * sizeof(int));
-    auto out_bitmap = (char*) out_i32_array->buffers[0];
-    // out_i32_array->buffers[0] = nullptr;
-    auto out_value = (int*) out_i32_array->buffers[1];
+    auto out_i32_array = new ArrowArray();
+    auto out_bitmap = out_i32_array->add_buffer<char>(in_i32_array->length * sizeof(char));
+    auto out_value = out_i32_array->add_buffer<int>(in_i32_array->length * sizeof(int));
 
-    for (int i=0; i<out_i32_array->length; i++) {
+    for (int i=0; i<in_i32_array->length; i++) {
+        out_i32_array->length++;
         out_bitmap[i/8] |= (1 << (i % 8));
         out_value[i] = in_value[i] + 10;
     }
+
+    out_array->children[0] = out_i32_array;
 }
 
 arrow::Result<std::shared_ptr<arrow::RecordBatch>> manipulate(std::shared_ptr<arrow::RecordBatch> rbatch) {

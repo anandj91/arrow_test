@@ -36,8 +36,8 @@ bool is_valid(char* bitmap, int j) {
 }
 
 void transform(ArrowSchema* in_schema, ArrowArray* in_array, ArrowSchema* out_schema, ArrowArray* out_array) {
-    print_schema(in_schema);
-    print_array(in_array);
+    arrow_print_schema(in_schema);
+    arrow_print_array(in_array);
 
 
     auto* in_i32_array = in_array->children[0];

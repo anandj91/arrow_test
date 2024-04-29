@@ -46,7 +46,7 @@ struct ArrowArray {
 
 #endif  // ARROW_C_DATA_INTERFACE
 
-void print_schema(ArrowSchema* schema)
+void arrow_print_schema(ArrowSchema* schema)
 {
     std::cout << "===== Schema (" << std::hex << schema << std::dec << ") ======" << std::endl;
     std::cout << "Format: " << schema->format << std::endl;
@@ -62,11 +62,11 @@ void print_schema(ArrowSchema* schema)
     std::cout << "]" << std::endl << std::endl;
 
     for (int i=0; i<schema->n_children; i++) {
-        print_schema(schema->children[i]);
+        arrow_print_schema(schema->children[i]);
     }
 }
 
-void print_array(ArrowArray* array)
+void arrow_print_array(ArrowArray* array)
 {
     std::cout << "===== Array (" << std::hex << array << std::dec << ") ======" << std::endl;
     std::cout << "Length: " << array->length << std::endl;
@@ -85,7 +85,7 @@ void print_array(ArrowArray* array)
     std::cout << "]" << std::endl << std::endl;
 
     for (int i=0; i<array->n_children; i++) {
-        print_array(array->children[i]);
+        arrow_print_array(array->children[i]);
     }
 }
 

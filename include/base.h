@@ -24,55 +24,6 @@ struct ArrowSchema {
     // Opaque producer-specific data
     void* private_data;
 
-    ArrowSchema() {}
-
-    ArrowSchema(
-        const char* format,
-        const char* name,
-        const char* metadata,
-        int64_t flags,
-        int64_t n_children,
-        struct ArrowSchema** children,
-        struct ArrowSchema* dictionary,
-        void (*release)(struct ArrowSchema*),
-        void* private_data) :
-        format(format),
-        name(name),
-        metadata(metadata),
-        flags(flags),
-        n_children(n_children),
-        children(children),
-        dictionary(dictionary),
-        release(release),
-        private_data(private_data) {}
-
-    ArrowSchema(const ArrowSchema& schema) :
-        ArrowSchema(
-            schema.format,
-            schema.name,
-            schema.metadata,
-            schema.flags,
-            schema.n_children,
-            schema.children,
-            schema.dictionary,
-            schema.release,
-            schema.private_data) {}
-
-    void print_schema() {
-        std::cout << "===== Schema (" << std::hex << this << std::dec << ") ======" << std::endl;
-        std::cout << "Format: " << this->format << std::endl;
-        std::cout << "Name: " << this->name << std::endl;
-        std::cout << "Flags: " << this->flags << " ";
-        std::cout << ((this->flags & ARROW_FLAG_NULLABLE) ? "Nullable" : "") << " ";
-        std::cout << ((this->flags & ARROW_FLAG_DICTIONARY_ORDERED) ? "Dict ordered" : "") << " ";
-        std::cout << ((this->flags & ARROW_FLAG_MAP_KEYS_SORTED) ? "Map keys sorted" : "") << std::endl;
-        std::cout << "Num of children: " << this->n_children << std::endl;
-        std::cout << std::endl;
-
-        for (int i=0; i<this->n_children; i++) {
-            this->children[i]->print_schema();
-        }
-    }
 };
 
 struct ArrowArray {
@@ -91,116 +42,101 @@ struct ArrowArray {
     // Opaque producer-specific data
     void* private_data;
 
-    ArrowArray() : ArrowArray(
-        0,          /* length */
-        0,          /* null_count */
-        0,          /* offset */
-        0,          /* n_buffers */
-        0,          /* n_children */
-        nullptr,    /* buffers */
-        nullptr,    /* children */
-        nullptr,    /* dictionary */
-        nullptr,    /* release */
-        nullptr     /* private_data */
-    ) {
-        this->buffers = (const void**) calloc(10, sizeof(char*));
-        this->children = (struct ArrowArray**) calloc(10, sizeof(ArrowArray*));
-        this->dictionary = nullptr;
-        this->release = static_cast<void(*)(struct ArrowArray*)>(
-            [] (struct ArrowArray* array) {
-                for (int i=0; i<array->n_buffers; i++) {
-                    free((void*) array->buffers[i]);
-                }
-                for (int i=0; i<array->n_children; i++) {
-                    array->children[i]->release(array->children[i]);
-                    delete array->children[i];
-                }
-
-                free(array->buffers);
-                free(array->children);
-
-                array->release = nullptr;
-            }
-        );
-        this->private_data = nullptr;
-    }
-
-    ArrowArray(const ArrowArray& array) : ArrowArray(
-        array.length,
-        array.null_count,
-        array.offset,
-        array.n_buffers,
-        array.n_children,
-        array.buffers,
-        array.children,
-        array.dictionary,
-        array.release,
-        array.private_data
-    ) {}
-
-    ArrowArray(
-        int64_t length,
-        int64_t null_count,
-        int64_t offset,
-        int64_t n_buffers,
-        int64_t n_children,
-        const void** buffers,
-        struct ArrowArray** children,
-        struct ArrowArray* dictionary,
-        void (*release)(struct ArrowArray*),
-        void* private_data) :
-        length(length),
-        null_count(null_count),
-        offset(offset),
-        n_buffers(n_buffers),
-        n_children(n_children),
-        buffers(buffers),
-        children(children),
-        dictionary(dictionary),
-        release(release),
-        private_data(private_data)
-    {}
-
-    void print_array() {
-        std::cout << "===== Array (" << std::hex << this << std::dec << ") ======" << std::endl;
-        std::cout << "Length: " << this->length << std::endl;
-        std::cout << "Null count: " << this->null_count << std::endl;
-        std::cout << "Offset: " << this->offset << std::endl;
-        std::cout << "Num of buffers: " << this->n_buffers << " [ ";
-        for (int i=0; i<this->n_buffers; i++) {
-            std::cout << std::hex << this->buffers[i] << std::dec << " ";
-        }
-        std::cout << "]" << std::endl;
-
-        std::cout << "Num of children: " << this->n_children << " [ ";
-        for (int i=0; i<this->n_children; i++) {
-            std::cout << std::hex << this->children[i] << std::dec << " ";
-        }
-        std::cout << "]" << std::endl << std::endl;
-
-        for (int i=0; i<this->n_children; i++) {
-            this->children[i]->print_array();
-        }
-    }
-
-    template<typename T>
-    T* add_buffer(int size) {
-        auto* buf = (T*) malloc(size * sizeof(T));
-
-        this->buffers[this->n_buffers] = (void*) buf;
-        this->n_buffers++;
-
-        return buf;
-    }
-
-    ArrowArray* add_children() {
-        auto* array = new ArrowArray();
-
-        this->children[this->n_children] = array;
-        this->n_children++;
-
-        return array;
-    }
 };
 
 #endif  // ARROW_C_DATA_INTERFACE
+
+void print_schema(ArrowSchema* schema)
+{
+    std::cout << "===== Schema (" << std::hex << schema << std::dec << ") ======" << std::endl;
+    std::cout << "Format: " << schema->format << std::endl;
+    std::cout << "Name: " << schema->name << std::endl;
+    std::cout << "Flags: " << schema->flags << " ";
+    std::cout << ((schema->flags & ARROW_FLAG_NULLABLE) ? "Nullable" : "") << " ";
+    std::cout << ((schema->flags & ARROW_FLAG_DICTIONARY_ORDERED) ? "Dict ordered" : "") << " ";
+    std::cout << ((schema->flags & ARROW_FLAG_MAP_KEYS_SORTED) ? "Map keys sorted" : "") << std::endl;
+    std::cout << "Num of children: " << schema->n_children << " [ ";
+    for (int i=0; i<schema->n_children; i++) {
+        std::cout << std::hex << schema->children[i] << std::dec << " ";
+    }
+    std::cout << "]" << std::endl << std::endl;
+
+    for (int i=0; i<schema->n_children; i++) {
+        print_schema(schema->children[i]);
+    }
+}
+
+void print_array(ArrowArray* array)
+{
+    std::cout << "===== Array (" << std::hex << array << std::dec << ") ======" << std::endl;
+    std::cout << "Length: " << array->length << std::endl;
+    std::cout << "Null count: " << array->null_count << std::endl;
+    std::cout << "Offset: " << array->offset << std::endl;
+    std::cout << "Num of buffers: " << array->n_buffers << " [ ";
+    for (int i=0; i<array->n_buffers; i++) {
+        std::cout << std::hex << array->buffers[i] << std::dec << " ";
+    }
+    std::cout << "]" << std::endl;
+
+    std::cout << "Num of children: " << array->n_children << " [ ";
+    for (int i=0; i<array->n_children; i++) {
+        std::cout << std::hex << array->children[i] << std::dec << " ";
+    }
+    std::cout << "]" << std::endl << std::endl;
+
+    for (int i=0; i<array->n_children; i++) {
+        print_array(array->children[i]);
+    }
+}
+
+void arrow_release_array(ArrowArray* array)
+{
+    for (int i=0; i<array->n_buffers; i++) {
+        free((void*) array->buffers[i]);
+    }
+    for (int i=0; i<array->n_children; i++) {
+        array->children[i]->release(array->children[i]);
+        free(array->children[i]);
+    }
+
+    free(array->buffers);
+    free(array->children);
+
+    array->release = nullptr;
+}
+
+void arrow_make_array(ArrowArray* array)
+{
+    array->length = 0;
+    array->null_count = 0;
+    array->offset = 0;
+    array->n_buffers = 0;
+    array->n_children = 0;
+    array->buffers = (const void**) calloc(10, sizeof(void*));
+    array->children = (ArrowArray**) calloc(10, sizeof(ArrowArray*));
+    array->dictionary = nullptr;
+    array->release = &arrow_release_array;
+    array->private_data = nullptr;
+}
+
+template<typename T>
+T* arrow_add_buffer(ArrowArray* array, int size)
+{
+    auto* buf = malloc(size * sizeof(T));
+
+    array->buffers[array->n_buffers] = buf;
+    array->n_buffers++;
+
+    return (T*) buf;
+}
+
+ArrowArray* arrow_add_child(ArrowArray* parent)
+{
+    auto* child = (ArrowArray*) malloc(sizeof(ArrowArray));
+    arrow_make_array(child);
+
+    parent->children[parent->n_children] = child;
+    parent->n_children++;
+
+    return child;
+}

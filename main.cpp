@@ -36,17 +36,20 @@ bool is_valid(char* bitmap, int j) {
 }
 
 void transform(ArrowSchema* in_schema, ArrowArray* in_array, ArrowSchema* out_schema, ArrowArray* out_array) {
-    in_schema->print_schema();
-    in_array->print_array();
+    print_schema(in_schema);
+    print_array(in_array);
+
 
     auto* in_i32_array = in_array->children[0];
     auto* in_i32_value = (int*) in_i32_array->buffers[1];
 
     *out_schema = *in_schema;
-    auto* out_bitmap = out_array->add_buffer<char>(in_array->length);
-    auto* out_i32_array = out_array->add_children();
-    auto* out_i32_bitmap = out_i32_array->add_buffer<char>(in_i32_array->length);
-    auto* out_i32_value = out_i32_array->add_buffer<int>(in_i32_array->length);
+    arrow_make_array(out_array);
+
+    auto* out_bitmap = arrow_add_buffer<char>(out_array, in_array->length);
+    auto* out_i32_array = arrow_add_child(out_array);
+    auto* out_i32_bitmap = arrow_add_buffer<char>(out_i32_array, in_i32_array->length);
+    auto* out_i32_value = arrow_add_buffer<int>(out_i32_array, in_i32_array->length);
 
     for (int i=0; i<in_i32_array->length; i++) {
         out_array->length++;

@@ -47,7 +47,9 @@ void transform(ArrowSchema* in_schema, ArrowArray* in_array, ArrowSchema* out_sc
     arrow_make_array(out_array);
 
     auto* out_bitmap = arrow_add_buffer<char>(out_array, in_array->length);
-    auto* out_i32_array = arrow_add_child(out_array);
+    auto* out_i32_array = (ArrowArray*) malloc(sizeof(ArrowArray));
+    arrow_make_array(out_i32_array);
+    arrow_add_child(out_array, out_i32_array);
     auto* out_i32_bitmap = arrow_add_buffer<char>(out_i32_array, in_i32_array->length);
     auto* out_i32_value = arrow_add_buffer<int>(out_i32_array, in_i32_array->length);
 

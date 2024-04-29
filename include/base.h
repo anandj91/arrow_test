@@ -70,7 +70,6 @@ void arrow_release_schema(ArrowSchema* schema)
 {
     for (int i=0; i<schema->n_children; i++) {
         schema->children[i]->release(schema->children[i]);
-        free(schema->children[i]);
     }
 
     free((void*) schema->format);
@@ -93,15 +92,10 @@ void arrow_make_schema(ArrowSchema* schema)
     schema->private_data = nullptr;
 }
 
-ArrowSchema* arrow_add_child(ArrowSchema* parent)
+void arrow_add_child(ArrowSchema* parent, ArrowSchema* child)
 {
-    auto* child = (ArrowSchema*) malloc(sizeof(ArrowSchema));
-    arrow_make_schema(child);
-
     parent->children[parent->n_children] = child;
     parent->n_children++;
-
-    return child;
 }
 
 void arrow_print_array(ArrowArray* array)
@@ -134,7 +128,6 @@ void arrow_release_array(ArrowArray* array)
     }
     for (int i=0; i<array->n_children; i++) {
         array->children[i]->release(array->children[i]);
-        free(array->children[i]);
     }
 
     free(array->buffers);
@@ -168,13 +161,8 @@ T* arrow_add_buffer(ArrowArray* array, int size)
     return (T*) buf;
 }
 
-ArrowArray* arrow_add_child(ArrowArray* parent)
+void arrow_add_child(ArrowArray* parent, ArrowArray* child)
 {
-    auto* child = (ArrowArray*) malloc(sizeof(ArrowArray));
-    arrow_make_array(child);
-
     parent->children[parent->n_children] = child;
     parent->n_children++;
-
-    return child;
 }

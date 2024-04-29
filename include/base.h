@@ -66,6 +66,44 @@ void arrow_print_schema(ArrowSchema* schema)
     }
 }
 
+void arrow_release_schema(ArrowSchema* schema)
+{
+    for (int i=0; i<schema->n_children; i++) {
+        schema->children[i]->release(schema->children[i]);
+        free(schema->children[i]);
+    }
+
+    free((void*) schema->format);
+    free((void*) schema->name);
+    free(schema->children);
+
+    schema->release = nullptr;
+}
+
+void arrow_make_schema(ArrowSchema* schema)
+{
+    schema->format = (const char*) calloc(10, sizeof(char));
+    schema->name = (const char*) calloc(100, sizeof(char));
+    schema->metadata = nullptr;
+    schema->flags = ARROW_FLAG_NULLABLE;
+    schema->n_children = 0;
+    schema->children = (ArrowSchema**) calloc(10, sizeof(ArrowSchema*));
+    schema->dictionary = nullptr;
+    schema->release = &arrow_release_schema;
+    schema->private_data = nullptr;
+}
+
+ArrowSchema* arrow_add_child(ArrowSchema* parent)
+{
+    auto* child = (ArrowSchema*) malloc(sizeof(ArrowSchema));
+    arrow_make_schema(child);
+
+    parent->children[parent->n_children] = child;
+    parent->n_children++;
+
+    return child;
+}
+
 void arrow_print_array(ArrowArray* array)
 {
     std::cout << "===== Array (" << std::hex << array << std::dec << ") ======" << std::endl;

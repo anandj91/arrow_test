@@ -9,6 +9,8 @@
 #define ARROW_FLAG_NULLABLE 2
 #define ARROW_FLAG_MAP_KEYS_SORTED 4
 
+extern "C" {
+
 struct ArrowSchema {
     // Array type description
     const char* format;
@@ -92,10 +94,15 @@ void arrow_make_schema(ArrowSchema* schema)
     schema->private_data = nullptr;
 }
 
-void arrow_add_child(ArrowSchema* parent, ArrowSchema* child)
+void arrow_add_child_schema(ArrowSchema* parent, ArrowSchema* child)
 {
     parent->children[parent->n_children] = child;
     parent->n_children++;
+}
+
+ArrowSchema* arrow_get_child_schema(ArrowSchema* schema, int idx)
+{
+    return schema->children[idx];
 }
 
 void arrow_print_array(ArrowArray* array)
@@ -160,8 +167,20 @@ void* arrow_add_buffer(ArrowArray* array, size_t size)
     return buf;
 }
 
-void arrow_add_child(ArrowArray* parent, ArrowArray* child)
+void arrow_add_child_array(ArrowArray* parent, ArrowArray* child)
 {
     parent->children[parent->n_children] = child;
     parent->n_children++;
 }
+
+ArrowArray* arrow_get_child_array(ArrowArray* array, int idx)
+{
+    return array->children[idx];
+}
+
+void* arrow_get_buffer(ArrowArray* array, int idx)
+{
+    return (void*) array->buffers[idx];
+}
+
+} // extern "C"

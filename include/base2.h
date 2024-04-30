@@ -1,3 +1,5 @@
+#include <cstring>
+
 #include "base.h"
 
 struct ArrowSchema2;
@@ -11,8 +13,16 @@ struct PrivateData {
 };
 
 struct ArrowSchema2 : public ArrowSchema {
-    ArrowSchema2() {
+    ArrowSchema2(
+        std::string format,
+        std::string name
+    ) {
         arrow_make_schema(this);
+
+        strcpy((char*) this->format, format.c_str());
+        strcpy((char*) this->name, name.c_str());
+        this->flags = ARROW_FLAG_NULLABLE;
+
         this->private_data = (void*) new PrivateData();
         this->release = (void(*)(ArrowSchema*)) &arrow_release_schema2;
     }
@@ -33,15 +43,19 @@ struct ArrowSchema2 : public ArrowSchema {
         arrow_release_schema2(this);
     }
 
-    ArrowSchema2* add_child() {
-        auto* schema = new ArrowSchema2();
-        arrow_add_child(this, schema);
+    ArrowSchema2* add_child(std::string format, std::string name) {
+        auto* schema = new ArrowSchema2(format, name);
+        arrow_add_child_schema(this, schema);
 
         auto* pdata = (PrivateData*) this->private_data;
         pdata->ptrs[pdata->count] = schema;
         pdata->count++;
 
         return schema;
+    }
+
+    ArrowSchema* get_child(int idx) {
+        return arrow_get_child_schema(this, idx);
     }
 };
 
@@ -68,12 +82,13 @@ struct ArrowArray2 : public ArrowArray {
         arrow_release_array2(this);
     }
 
-    ArrowArray2* add_child() {
-        auto* array = new ArrowArray2();
-        arrow_add_child(this, array);
+    template<typename T, typename... Args>
+    T* add_child(Args... args) {
+        auto* array = new T(args...);
+        arrow_add_child_array(this, array);
 
         auto* pdata = (PrivateData*) this->private_data;
-        pdata->ptrs[pdata->count] = array;
+        pdata->ptrs[pdata->count] = (void*) array;
         pdata->count++;
 
         return array;
@@ -82,5 +97,15 @@ struct ArrowArray2 : public ArrowArray {
     template<typename T>
     T* add_buffer(size_t len) {
         return (T*) arrow_add_buffer(this, len * sizeof(T));
+    }
+
+    template<typename T>
+    T* get_child(int idx) {
+        return (T*) arrow_get_child_array(this, idx);
+    }
+
+    template<typename T>
+    T* get_buffer(int idx) {
+        return (T*) arrow_get_buffer(this, idx);
     }
 };

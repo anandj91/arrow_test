@@ -19,7 +19,7 @@
 #include <vector>
 #include <chrono>
 
-#include "api.h"
+#include "primitive.h"
 
 #include <arrow/api.h>
 #include <arrow/csv/api.h>
@@ -35,7 +35,7 @@ bool is_valid(char* bitmap, int j) {
     return bitmap[j / 8] & (1 << (j % 8));
 }
 
-void transform(ArrowSchema* in_schema, ArrowArray* in_array, ArrowSchema* out_schema, ArrowArray2* out_array) {
+void transform(ArrowSchema* in_schema, ArrowArray* in_array, ArrowSchema* out_schema, StructArray* out_array) {
     arrow_print_schema(in_schema);
     arrow_print_array(in_array);
 
@@ -45,10 +45,10 @@ void transform(ArrowSchema* in_schema, ArrowArray* in_array, ArrowSchema* out_sc
 
     *out_schema = *in_schema;
 
-    auto* out_bitmap = out_array->add_buffer<char>(in_array->length);
-    auto* out_i32_array = out_array->add_child();
-    auto* out_i32_bitmap = out_i32_array->add_buffer<char>(in_i32_array->length);
-    auto* out_i32_value = out_i32_array->add_buffer<int>(in_i32_array->length);
+    auto* out_bitmap = out_array->get_bit_buf();
+    auto* out_i32_array = out_array->add_child<Int32Array>(in_i32_array->length);
+    auto* out_i32_bitmap = out_i32_array->get_bit_buf();
+    auto* out_i32_value = out_i32_array->get_val_buf();
 
     for (int i=0; i<in_i32_array->length; i++) {
         out_array->length++;
@@ -62,14 +62,15 @@ void transform(ArrowSchema* in_schema, ArrowArray* in_array, ArrowSchema* out_sc
 arrow::Status manipulate(std::shared_ptr<arrow::RecordBatch> rbatch) {
     ArrowSchema in_schema;
     ArrowArray in_array;
-    ArrowSchema out_schema;
-    ArrowArray2 out_array;
 
     std::cout << "#### Before #### " << std::endl << rbatch->ToString() << std::endl;
 
     auto estart = high_resolution_clock::now();
     ARROW_RETURN_NOT_OK(arrow::ExportRecordBatch(*rbatch, &in_array, &in_schema));
     auto estop = high_resolution_clock::now();
+
+    ArrowSchema out_schema;
+    StructArray out_array(in_array.length);
 
     auto tstart = high_resolution_clock::now();
     transform(&in_schema, &in_array, &out_schema, &out_array);

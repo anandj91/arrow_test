@@ -19,7 +19,7 @@
 #include <vector>
 #include <chrono>
 
-#include "base.h"
+#include "api.h"
 
 #include <arrow/api.h>
 #include <arrow/csv/api.h>
@@ -35,7 +35,7 @@ bool is_valid(char* bitmap, int j) {
     return bitmap[j / 8] & (1 << (j % 8));
 }
 
-void transform(ArrowSchema* in_schema, ArrowArray* in_array, ArrowSchema* out_schema, ArrowArray* out_array) {
+void transform(ArrowSchema* in_schema, ArrowArray* in_array, ArrowSchema* out_schema, ArrowArray2* out_array) {
     arrow_print_schema(in_schema);
     arrow_print_array(in_array);
 
@@ -44,14 +44,11 @@ void transform(ArrowSchema* in_schema, ArrowArray* in_array, ArrowSchema* out_sc
     auto* in_i32_value = (int*) in_i32_array->buffers[1];
 
     *out_schema = *in_schema;
-    arrow_make_array(out_array);
 
-    auto* out_bitmap = arrow_add_buffer<char>(out_array, in_array->length);
-    auto* out_i32_array = (ArrowArray*) malloc(sizeof(ArrowArray));
-    arrow_make_array(out_i32_array);
-    arrow_add_child(out_array, out_i32_array);
-    auto* out_i32_bitmap = arrow_add_buffer<char>(out_i32_array, in_i32_array->length);
-    auto* out_i32_value = arrow_add_buffer<int>(out_i32_array, in_i32_array->length);
+    auto* out_bitmap = out_array->add_buffer<char>(in_array->length);
+    auto* out_i32_array = out_array->add_child();
+    auto* out_i32_bitmap = out_i32_array->add_buffer<char>(in_i32_array->length);
+    auto* out_i32_value = out_i32_array->add_buffer<int>(in_i32_array->length);
 
     for (int i=0; i<in_i32_array->length; i++) {
         out_array->length++;
@@ -66,7 +63,7 @@ arrow::Status manipulate(std::shared_ptr<arrow::RecordBatch> rbatch) {
     ArrowSchema in_schema;
     ArrowArray in_array;
     ArrowSchema out_schema;
-    ArrowArray out_array;
+    ArrowArray2 out_array;
 
     std::cout << "#### Before #### " << std::endl << rbatch->ToString() << std::endl;
 

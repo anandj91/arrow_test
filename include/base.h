@@ -150,15 +150,14 @@ void arrow_make_array(ArrowArray* array)
     array->private_data = nullptr;
 }
 
-template<typename T>
-T* arrow_add_buffer(ArrowArray* array, int size)
+void* arrow_add_buffer(ArrowArray* array, size_t size)
 {
-    auto* buf = malloc(size * sizeof(T));
+    auto* buf = malloc(size);
 
     array->buffers[array->n_buffers] = buf;
     array->n_buffers++;
 
-    return (T*) buf;
+    return buf;
 }
 
 void arrow_add_child(ArrowArray* parent, ArrowArray* child)

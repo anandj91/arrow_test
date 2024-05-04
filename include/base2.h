@@ -14,8 +14,8 @@ struct PrivateData {
 
 struct ArrowSchema2 : public ArrowSchema {
     ArrowSchema2(
-        std::string format,
-        std::string name
+        std::string name,
+        std::string format
     ) {
         arrow_make_schema(this);
 
@@ -43,8 +43,9 @@ struct ArrowSchema2 : public ArrowSchema {
         arrow_release_schema2(this);
     }
 
-    ArrowSchema2* add_child(std::string format, std::string name) {
-        auto* schema = new ArrowSchema2(format, name);
+    template<typename T, typename... Args>
+    T* add_child(Args... args) {
+        auto* schema = new T(args...);
         arrow_add_child_schema(this, schema);
 
         auto* pdata = (PrivateData*) this->private_data;
@@ -107,5 +108,31 @@ struct ArrowArray2 : public ArrowArray {
     template<typename T>
     T* get_buffer(int idx) {
         return (T*) arrow_get_buffer(this, idx);
+    }
+};
+
+#define GEN_SCHEMA(SCHEMA, FMT_STR) \
+    struct SCHEMA : public ArrowSchema2 { \
+        SCHEMA(std::string name) : ArrowSchema2(name, FMT_STR) {} \
+    };
+
+struct NullableArray : public ArrowArray2 {
+    NullableArray(size_t len) : ArrowArray2() {
+        this->add_buffer<char>(len / 8 + 1);
+    }
+
+    char* get_bit_buf() {
+        return this->get_buffer<char>(0);
+    }
+};
+
+template<typename T>
+struct PrimArray : public NullableArray {
+    PrimArray(size_t len) : NullableArray(len) {
+        this->add_buffer<T>(len);
+    }
+
+    T* get_val_buf() {
+        return this->get_buffer<T>(1);
     }
 };

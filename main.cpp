@@ -19,7 +19,7 @@
 #include <vector>
 #include <chrono>
 
-#include "primitive.h"
+#include "defs.h"
 
 #include <arrow/api.h>
 #include <arrow/csv/api.h>
@@ -35,15 +35,11 @@ bool is_valid(char* bitmap, int j) {
     return bitmap[j / 8] & (1 << (j % 8));
 }
 
-void transform(ArrowSchema* in_schema, ArrowArray* in_array, ArrowSchema* out_schema, StructArray* out_array) {
-    arrow_print_schema(in_schema);
-    arrow_print_array(in_array);
-
-
+void transform(ArrowSchema* in_schema, ArrowArray* in_array, StructSchema* out_schema, StructArray* out_array) {
     auto* in_i32_array = in_array->children[0];
     auto* in_i32_value = (int*) in_i32_array->buffers[1];
 
-    *out_schema = *in_schema;
+    out_schema->add_child<Int32Schema>("day");
 
     auto* out_bitmap = out_array->get_bit_buf();
     auto* out_i32_array = out_array->add_child<Int32Array>(in_i32_array->length);
@@ -64,17 +60,22 @@ arrow::Status manipulate(std::shared_ptr<arrow::RecordBatch> rbatch) {
     ArrowArray in_array;
 
     std::cout << "#### Before #### " << std::endl << rbatch->ToString() << std::endl;
-
     auto estart = high_resolution_clock::now();
     ARROW_RETURN_NOT_OK(arrow::ExportRecordBatch(*rbatch, &in_array, &in_schema));
     auto estop = high_resolution_clock::now();
 
-    ArrowSchema out_schema;
+    arrow_print_schema(&in_schema);
+    arrow_print_array(&in_array);
+
+    StructSchema out_schema("Date");
     StructArray out_array(in_array.length);
 
     auto tstart = high_resolution_clock::now();
     transform(&in_schema, &in_array, &out_schema, &out_array);
     auto tstop = high_resolution_clock::now();
+
+    arrow_print_schema(&out_schema);
+    arrow_print_array(&out_array);
 
     auto istart = high_resolution_clock::now();
     ARROW_ASSIGN_OR_RAISE(auto res, arrow::ImportRecordBatch(&out_array, &out_schema));
